@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.7.0 <0.9.0;
+
+contract auction {
+    // Variable
+    uint public auctionEndTime;
+    uint public highestBid;
+    address public highestBidder;
+    bool ended = false;
+    address payable public beneficiary;
+
+    event highestBidIncrease(address bidder, uint amount);
+    event auctionEnded(address winner, uint amount);
+
+    mapping(address => uint) public pendingReturns;
+
+    constructor(uint _biddingTime, address payable _beneficiary){
+        beneficiary = _beneficiary;
+        auctionEndTime = block.timestamp + _biddingTime;
+    }
+
+    // Function
+    function bid() public payable {
+        if (block.timestamp > auctionEndTime) {
+            revert("The auction has ended");
+        }
+
+        if (msg.value <= highestBid) {
+            revert("Your price is lower than the highest price");
+        }
+
+        if (highestBid !=0 ) {
+            pendingReturns[highestBidder] += highestBid;
+        }
+
+        highestBidder = msg.sender;
+        highestBid = msg.value;
+        emit highestBidIncrease(msg.sender, msg.value);
+    }
+
+    function withdraw() public returns(bool) {
+        uint amount = pendingReturns[msg.sender];
+        if (amount > 0) {
+            pendingReturns[msg.sender] = 0;
+
+            if(payable(msg.sender).send(amount)) {
+                pendingReturns[msg.sender] = amount;
+                return false;
+            }
+        }
+        return true;
+    }
+    function auctionEnd() public {
+        if (ended) {
+            revert("The auction may have ended");
+        }
+        if (block.timestamp < auctionEndTime) {
+            revert("The auction is not over yet");
+        }
+
+        ended = true;
+        emit auctionEnded(highestBidder, highestBid);
+
+        beneficiary.transfer(highestBid);
+    }
+}
